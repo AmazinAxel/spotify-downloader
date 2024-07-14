@@ -1,18 +1,21 @@
 [project]
-name = "spotify-web-downloader"
-description = "A Python CLI app for downloading songs/music videos/albums/playlists directly from Spotify."
+name = "spotify-downloader"
+description = "Python CLI for downloading music playlists from Spotify."
 requires-python = ">=3.8"
-authors = [{ name = "glomatico" }]
+authors = [
+    { name = "glomatico" },
+    { name = "AmazinAxel" }
+]
 dependencies = ["click", "pybase62", "pywidevine", "pyyaml", "yt-dlp"]
 readme = "README.md"
 dynamic = ["version"]
 
 [project.urls]
-repository = "https://github.com/glomatico/spotify-web-downloader"
+repository = "https://github.com/AmazinAxel/spotify-downloader"
 
 [build-system]
 requires = ["flit_core"]
 build-backend = "flit_core.buildapi"
 
 [project.scripts]
-spotify-web-downloader = "spotify_web_downloader.cli:main"
+spotify-downloader = "spotify_downloader.main:main"

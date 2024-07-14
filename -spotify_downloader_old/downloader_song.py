@@ -14,7 +14,7 @@ class DownloaderSong:
     def __init__(
         self,
         downloader: Downloader,
-        template_folder_album: str = "{album_artist}/{album}",
+        template_folder_album: str = "{album_artist}",
         template_folder_compilation: str = "Compilations/{album}",
         template_file_single_disc: str = "{track:02d} {title}",
         template_file_multi_disc: str = "{disc}-{track:02d} {title}",

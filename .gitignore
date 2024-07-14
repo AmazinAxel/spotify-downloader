@@ -1,7 +1,2 @@
-/*
 __pycache__
-!spotify_web_downloader
-!.gitignore
-!pyproject.toml
-!README.md
-!requirements.txt
+.venv/
