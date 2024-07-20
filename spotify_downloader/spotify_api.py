@@ -11,7 +11,7 @@ import base62
 import requests
 
 
-class SpotifyApi:
+class spotify_api:
     SPOTIFY_HOME_PAGE_URL = "https://open.spotify.com/"
     GID_METADATA_API_URL = (
         "https://spclient.wg.spotify.com/metadata/4/track/{gid}?market=from_token"
@@ -159,18 +159,15 @@ class SpotifyApi:
             album = self.extend_track_collection(album)
         return album
 
-    def get_playlist(
-        self,
-        playlist_id: str,
-        extend: bool = True,
-    ) -> dict:
+    def get_playlist(self, playlist_id: str) -> dict:
+        print(METADATA_API_URL.format(type="playlists", track_id=playlist_id))
         response = self.session.get(
             self.METADATA_API_URL.format(type="playlists", track_id=playlist_id)
         )
+        print(METADATA_API_URL)
         self._check_response(response)
         playlist = response.json()
-        if extend:
-            playlist = self.extend_track_collection(playlist)
+        playlist = self.extend_track_collection(playlist)
         return playlist
 
     def get_now_playing_view(self, track_id: str, artist_id: str) -> dict:

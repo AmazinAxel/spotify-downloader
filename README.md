@@ -18,5 +18,5 @@ pip install .
 # Example usage, downloading the entire playlist to the ~/Music/Focus/ dir
 spotify-downloader -f "Focus" https://open.spotify.com/playlist/3Qk9br14pjEo2aRItDhb2f 
 ```
-Place your cookies file in the project directory and name it `cookies.txt`.
+Use an extension [such as this](https://chromewebstore.google.com/detail/open-cookiestxt/gdocmgbfkjnnpapoeobnolbbkoibbcif) Place your cookies file in the project directory and name it `cookies.txt`.
 Use `spotify-downloader (URL goes here)` to download the playlist directly to a folder in ~/Music.
