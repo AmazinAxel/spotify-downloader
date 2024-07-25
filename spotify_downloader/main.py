@@ -14,10 +14,8 @@ MP4_TAGS_MAP = {
     "artist": "\xa9ART",
     "composer": "\xa9wrt",
     "copyright": "cprt",
-    "lyrics": "\xa9lyr",
     "media_type": "stik",
     "producer": "\xa9prd",
-    "rating": "rtng",
     "release_date": "\xa9day",
     "title": "\xa9nam",
     "url": "\xa9url",
@@ -26,9 +24,9 @@ MP4_TAGS_MAP = {
 from .downloader import Downloader
 from .downloader_song import DownloaderSong
 from .enums import DownloadModeSong, RemuxMode
-from .spotify_api import spotify_api
+from .spotify_api import SpotifyApi
 
-spotify_api_sig = inspect.signature(spotify_api.__init__)
+spotify_api_sig = inspect.signature(SpotifyApi.__init__)
 downloader_sig = inspect.signature(Downloader.__init__)
 downloader_song_sig = inspect.signature(DownloaderSong.__init__)
 
@@ -55,6 +53,7 @@ def get_param_string(param: click.Parameter) -> str:
     "-f",
     is_flag=True,
     type=str,
+    required=True,
     help="The name of the output folder (within ~/Music)",
 )
 @click.option(
@@ -62,7 +61,7 @@ def get_param_string(param: click.Parameter) -> str:
     "-p",
     is_flag=True,
     type=bool,
-    help="Whether to download music in premium quality (requires Spotify Premium account)",
+    help="Whether to download music in premium quality (requires a Spotify Premium account)",
 )
 
 
@@ -70,8 +69,8 @@ def main(
     url: str,
     foldername: str,
     premium: bool,
-    cookies_path = Path("./cookies.txt"),
-    temp_path: Path = Path("./tmp"),
+    cookies_path = Path("/home/alec/Projects/spotify-downloader/cookies.txt"),
+    temp_path: Path = Path("./temp"),
 ) -> None:
     logging.basicConfig(
         format="[%(levelname)-8s %(asctime)s] %(message)s",
@@ -82,10 +81,9 @@ def main(
     if not cookies_path.exists():
         logger.critical("Cookies file not found: ", cookies_path)
         return
-    logger.debug(f"Starting download of {url[1]}")
-    spotifyapi = spotify_api(cookies_path)
+    spotify_api = SpotifyApi(cookies_path)
     downloader = Downloader(
-        spotifyapi,
+        spotify_api,
         foldername
     )
     downloader_song = DownloaderSong(
@@ -96,10 +94,12 @@ def main(
     downloader.set_cdm()
     try:
         global song_queue
-        song_queue = downloader.get_download_queue(url[1])
+        url_info = downloader.get_url_info(url[1])
+        song_queue = downloader.get_download_queue(url_info)
     except Exception as e:
         logger.error(f'Failed to get {url[1]} Error: {e}')
         #continue
+    logger.debug("Loading song queues...")
     try:
         for queue_index, queue_item in enumerate(song_queue, start=1):
             # First, check if the file already exists
@@ -110,17 +110,17 @@ def main(
             logger.info(f'({queue_progress}) Downloading "{track["name"]}"')
             track_id = track["id"]
             logger.debug("Getting GID metadata")
-            gid = spotifyapi.track_id_to_gid(track_id)
-            metadata_gid = spotifyapi.get_gid_metadata(gid)
+            gid = spotify_api.track_id_to_gid(track_id)
+            metadata_gid = spotify_api.get_gid_metadata(gid)
 
             # Get metadata
             logger.debug("Getting album metadata")
-            album_metadata = spotifyapi.get_album(
-                spotifyapi.gid_to_track_id(metadata_gid["album"]["gid"])
+            album_metadata = spotify_api.get_album(
+                spotify_api.gid_to_track_id(metadata_gid["album"]["gid"])
             )
             # Get creds
             logger.debug("Getting track credits")
-            track_credits = spotifyapi.get_track_credits(track_id)
+            track_credits = spotify_api.get_track_credits(track_id)
             tags = downloader_song.get_tags(
                 metadata_gid,
                 album_metadata,
@@ -128,6 +128,7 @@ def main(
             )
 
             # Path creator
+            logger.debug("Creating path")
             final_path = downloader_song.get_final_path(tags)
             if final_path.exists():
                 logger.warning(
@@ -144,11 +145,11 @@ def main(
                 #continue
             
             logger.debug("Getting PSSH")
-            pssh = spotifyapi.get_pssh(file_id)
+            pssh = spotify_api.get_pssh(file_id)
             logger.debug("Getting decryption key")
             decryption_key = downloader_song.get_decryption_key(pssh)
             logger.debug("Getting stream URL")
-            stream_url = spotifyapi.get_stream_url(file_id)
+            stream_url = spotify_api.get_stream_url(file_id)
             encrypted_path = downloader.get_encrypted_path(track_id, ".m4a")
             decrypted_path = downloader.get_decrypted_path(track_id, ".m4a")
             logger.debug(f'Downloading to "{encrypted_path}"')
@@ -167,7 +168,7 @@ def main(
             downloader.move_to_final_path(remuxed_path, final_path)
     except Exception as e:
         logger.error(
-            f'Failed to download song! Error:" {e}'
+            f'Failed to download song! Error: {e}'
         )
     finally: # Clean up
         if temp_path.exists():

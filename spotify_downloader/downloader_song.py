@@ -14,16 +14,12 @@ class DownloaderSong:
     def __init__(
         self,
         downloader: Downloader,
-        template_folder_album: str = "{album_artist}",
-        template_file_single_disc: str = "{track:02d} {title}",
-        template_file_multi_disc: str = "{disc}-{track:02d} {title}",
+        template_file_single_disc: str = "{track:02d} {title}", # i want to remove this but it causes an error
         download_mode: DownloadModeSong = DownloadModeSong.YTDLP,
         premium: bool = False,
     ):
         self.downloader = downloader
-        self.template_folder_album = template_folder_album
-        self.template_file_single_disc = template_file_single_disc
-        self.template_file_multi_disc = template_file_multi_disc
+        self.template_file_single_disc = template_file_single_disc # remove me pls
         self.download_mode = download_mode
         self.premium = premium
         self._set_codec()
@@ -32,27 +28,7 @@ class DownloaderSong:
         self.codec = "MP4_256" if self.premium else "MP4_128"
 
     def get_final_path(self, tags: dict) -> Path:
-        final_path_file = (
-            self.template_file_multi_disc.split("/")
-            if tags["disc_total"] > 1
-            else self.template_file_single_disc.split("/")
-        )
-        final_path_folder = [
-            self.downloader.get_sanitized_string(i.format(**tags), True)
-            for i in final_path_folder
-        ]
-        final_path_file = [
-            self.downloader.get_sanitized_string(i.format(**tags), True)
-            for i in final_path_file[:-1]
-        ] + [
-            self.downloader.get_sanitized_string(
-                final_path_file[-1].format(**tags), False
-            )
-            + ".m4a"
-        ]
-        return self.downloader.output_path.joinpath(*final_path_folder).joinpath(
-            *final_path_file
-        )
+        return Path(f"/home/alec/Music/Test/{tags['album_artist']} - {tags['title']}.m4a")
 
     def get_decryption_key(self, pssh: str) -> str:
         try:
@@ -84,7 +60,6 @@ class DownloaderSong:
         metadata_gid: dict,
         album_metadata: dict,
         track_credits: dict,
-        lyrics_unsynced: str,
     ) -> dict:
         isrc = None
         if metadata_gid.get("external_id"):
@@ -108,9 +83,6 @@ class DownloaderSong:
             "album": album_metadata["name"],
             "album_artist": self.downloader.get_artist(album_metadata["artists"]),
             "artist": self.downloader.get_artist(metadata_gid["artist"]),
-            "compilation": (
-                True if album_metadata["album_type"] == "compilation" else False
-            ),
             "composer": self.downloader.get_artist(composers) if composers else None,
             "copyright": next(
                 (i["text"] for i in album_metadata["copyrights"] if i["type"] == "P"),
@@ -120,10 +92,8 @@ class DownloaderSong:
             "disc_total": album_metadata["tracks"]["items"][-1]["disc_number"],
             "isrc": isrc.get("id") if isrc is not None else None,
             "label": album_metadata.get("label"),
-            "lyrics": lyrics_unsynced,
             "media_type": 1,
             "producer": self.downloader.get_artist(producers) if producers else None,
-            "rating": 1 if metadata_gid.get("explicit") else 0,
             "release_date": self.downloader.get_release_date_tag(
                 release_date_datetime_obj
             ),
@@ -145,6 +115,39 @@ class DownloaderSong:
         elif self.download_mode == DownloadModeSong.ARIA2C:
             self.download_aria2c(encrypted_path, stream_url)
 
+    def download_ytdlp(self, encrypted_path: Path, stream_url: str) -> None:
+        with YoutubeDL(
+            {
+                "quiet": True,
+                "no_warnings": True,
+                "outtmpl": str(encrypted_path),
+                "allow_unplayable_formats": True,
+                "fixup": "never",
+                "allowed_extractors": ["generic"],
+                "noprogress": self.downloader.silence,
+            }
+        ) as ydl:
+            ydl.download(stream_url)
+
+    def download_aria2c(self, encrypted_path: Path, stream_url: str) -> None:
+        encrypted_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                self.downloader.aria2c_path_full,
+                "--no-conf",
+                "--download-result=hide",
+                "--console-log-level=error",
+                "--summary-interval=0",
+                "--file-allocation=none",
+                stream_url,
+                "--out",
+                encrypted_path,
+            ],
+            check=True,
+            **self.downloader.subprocess_additional_args,
+        )
+        print("\r", end="")
+
     def remux(
         self,
         encrypted_path: Path,
@@ -159,6 +162,23 @@ class DownloaderSong:
                 encrypted_path, decrypted_path, decryption_key
             )
             self.remux_mp4box(decrypted_path, remuxed_path)
+
+    def remux_mp4box(self, decrypted_path: Path, remuxed_path: Path):
+        subprocess.run(
+            [
+                self.downloader.mp4box_path_full,
+                "-quiet",
+                "-add",
+                decrypted_path,
+                "-itags",
+                "artist=placeholder",
+                "-keep-utc",
+                "-new",
+                remuxed_path,
+            ],
+            check=True,
+            **self.downloader.subprocess_additional_args,
+        )
 
     def remux_ffmpeg(
         self,
@@ -185,3 +205,34 @@ class DownloaderSong:
             check=True,
             **self.downloader.subprocess_additional_args,
         )
+
+    def get_lyrics_synced_timestamp_lrc(self, time: int) -> str:
+        lrc_timestamp = datetime.datetime.fromtimestamp(
+            time / 1000.0, tz=datetime.timezone.utc
+        )
+        return lrc_timestamp.strftime("%M:%S.%f")[:-4]
+
+    def get_lyrics(self, track_id: str) -> Lyrics:
+        lyrics = Lyrics()
+        raw_lyrics = self.downloader.spotify_api.get_lyrics(track_id)
+        if raw_lyrics is None:
+            return lyrics
+        lyrics.synced = ""
+        lyrics.unsynced = ""
+        for line in raw_lyrics["lyrics"]["lines"]:
+            if raw_lyrics["lyrics"]["syncType"] == "LINE_SYNCED":
+                lyrics.synced += f'[{self.get_lyrics_synced_timestamp_lrc(int(line["startTimeMs"]))}]{line["words"]}\n'
+            lyrics.unsynced += f'{line["words"]}\n'
+        lyrics.unsynced = lyrics.unsynced[:-1]
+        return lyrics
+
+    def get_cover_path(self, final_path: Path) -> Path:
+        return final_path.parent / "Cover.jpg"
+
+    def get_lrc_path(self, final_path: Path) -> Path:
+        return final_path.with_suffix(".lrc")
+
+    def save_lrc(self, lrc_path: Path, lyrics_synced: str):
+        if lyrics_synced:
+            lrc_path.parent.mkdir(parents=True, exist_ok=True)
+            lrc_path.write_text(lyrics_synced, encoding="utf8")

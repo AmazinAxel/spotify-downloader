@@ -15,7 +15,7 @@ from .constants import *
 from .enums import RemuxMode
 from .hardcoded_wvd import HARDCODED_WVD
 from .models import DownloadQueueItem, UrlInfo
-from .spotify_api import spotify_api
+from .spotify_api import SpotifyApi
 
 
 class Downloader:
@@ -23,9 +23,9 @@ class Downloader:
 
     def __init__(
         self,
-        spotify_api: spotify_api,
-        output_path: Path = Path("~/Music/testing/"),
-        temp_path: Path = Path("./tmp"),
+        spotify_api: SpotifyApi,
+        output_path: Path = Path("./Spotify"),
+        temp_path: Path = Path("./temp"),
         wvd_path: Path = None,
         ffmpeg_path: str = "ffmpeg",
         mp4box_path: str = "MP4Box",
@@ -90,19 +90,35 @@ class Downloader:
             self.cdm = Cdm.from_device(Device.loads(HARDCODED_WVD))
 
     def get_url_info(self, url: str) -> UrlInfo:
-        url_regex_result = re.search(r"(|track)/(\w{22})", url)
+        url_regex_result = re.search(r"(album|playlist|track)/(\w{22})", url)
         if url_regex_result is None:
             raise Exception("Invalid URL")
-        return UrlInfo(type=playlist.group(1), id=url_regex_result.group(2))
+        return UrlInfo(type=url_regex_result.group(1), id=url_regex_result.group(2))
 
-    def get_download_queue(self, url: str) -> list[DownloadQueueItem]:
+    def get_download_queue(self, url_info: UrlInfo) -> list[DownloadQueueItem]:
         download_queue = []
-        print(url)
-        download_queue.extend([
-            DownloadQueueItem(metadata=track_metadata["track"])
-                for track_metadata in self.spotify_api.get_playlist(url)["tracks"]["items"]
-        ])
-        
+        if url_info.type == "album":
+            download_queue.extend(
+                [
+                    DownloadQueueItem(metadata=track_metadata)
+                    for track_metadata in self.spotify_api.get_album(url_info.id)[
+                        "tracks"
+                    ]["items"]
+                ]
+            )
+        elif url_info.type == "playlist":
+            download_queue.extend(
+                [
+                    DownloadQueueItem(metadata=track_metadata["track"])
+                    for track_metadata in self.spotify_api.get_playlist(url_info.id)[
+                        "tracks"
+                    ]["items"]
+                ]
+            )
+        elif url_info.type == "track":
+            download_queue.append(
+                DownloadQueueItem(metadata=self.spotify_api.get_track(url_info.id))
+            )
         return download_queue
 
     def get_sanitized_string(self, dirty_string: str, is_folder: bool) -> str:
@@ -200,7 +216,7 @@ class Downloader:
     def get_image_bytes(url: str) -> bytes:
         return requests.get(url).content
 
-    def apply_tags(self, fixed_location: Path, tags: dict, cover_url: str):
+    def apply_tags(self, fixed_location: Path, tags: dict):
         to_apply_tags = [
             tag_name
             for tag_name in tags.keys()
@@ -208,22 +224,13 @@ class Downloader:
         ]
         mp4_tags = {}
         for tag_name in to_apply_tags:
-            if tag_name in ("disc", "disc_total"):
-                if mp4_tags.get("disk") is None:
-                    mp4_tags["disk"] = [[0, 0]]
-                if tag_name == "disc":
-                    mp4_tags["disk"][0][0] = tags[tag_name]
-                elif tag_name == "disc_total":
-                    mp4_tags["disk"][0][1] = tags[tag_name]
-            elif tag_name in ("track", "track_total"):
+            if tag_name in ("track", "track_total"):
                 if mp4_tags.get("trkn") is None:
                     mp4_tags["trkn"] = [[0, 0]]
                 if tag_name == "track":
                     mp4_tags["trkn"][0][0] = tags[tag_name]
                 elif tag_name == "track_total":
                     mp4_tags["trkn"][0][1] = tags[tag_name]
-            elif tag_name == "compilation":
-                mp4_tags["cpil"] = tags["compilation"]
             elif tag_name == "isrc":
                 mp4_tags["----:com.apple.iTunes:ISRC"] = [
                     MP4FreeForm(tags["isrc"].encode("utf-8"))
@@ -237,12 +244,6 @@ class Downloader:
                 and tags.get(tag_name) is not None
             ):
                 mp4_tags[MP4_TAGS_MAP[tag_name]] = [tags[tag_name]]
-        if "cover" not in self.exclude_tags_list:
-            mp4_tags["covr"] = [
-                MP4Cover(
-                    self.get_image_bytes(cover_url), imageformat=MP4Cover.FORMAT_JPEG
-                )
-            ]
         mp4 = MP4(fixed_location)
         mp4.clear()
         mp4.update(mp4_tags)
