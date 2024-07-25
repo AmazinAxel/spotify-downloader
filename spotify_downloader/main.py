@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import os
 from enum import Enum
 from pathlib import Path
 
@@ -51,8 +52,7 @@ def get_param_string(param: click.Parameter) -> str:
 @click.option(
     "--foldername",
     "-f",
-    is_flag=True,
-    type=str,
+    type=str,  # Remove is_flag=True to allow passing a folder name
     required=True,
     help="The name of the output folder (within ~/Music)",
 )
@@ -69,7 +69,7 @@ def main(
     url: str,
     foldername: str,
     premium: bool,
-    cookies_path = Path("/home/alec/Projects/spotify-downloader/cookies.txt"),
+    cookies_path = Path("./cookies.txt"),
     temp_path: Path = Path("./temp"),
 ) -> None:
     logging.basicConfig(
@@ -92,21 +92,31 @@ def main(
     )
     logger.debug("Setting up CDM")
     downloader.set_cdm()
+    logger.debug("Queuing songs...")
     try:
         global song_queue
-        url_info = downloader.get_url_info(url[1])
+        url_info = downloader.get_url_info(url[0])
         song_queue = downloader.get_download_queue(url_info)
     except Exception as e:
-        logger.error(f'Failed to get {url[1]} Error: {e}')
-        #continue
-    logger.debug("Loading song queues...")
+        logger.error(f'Failed to get {url[0]} Error: {e}')
+        exit()
     try:
+        # Create the folder if it doesn't exist
+        folder_path = Path(f"/home/alec/Music/{foldername}/")
+        os.makedirs(folder_path, exist_ok=True)
+        
         for queue_index, queue_item in enumerate(song_queue, start=1):
+            track = queue_item.metadata
+
             # First, check if the file already exists
+            final_path = folder_path.joinpath(f"{track['album']['artists'][0]['name']} - {track['name']}.m4a")
+
+            if final_path.exists():
+                logger.info(f"(Skipping {queue_index}/{len(song_queue)}) {track['album']['artists'][0]['name']} - {track['name']} already exists")
+                continue
 
             # Download the song if it doesn't exist
             queue_progress = f"Downloading track {queue_index}/{len(song_queue)}"
-            track = queue_item.metadata
             logger.info(f'({queue_progress}) Downloading "{track["name"]}"')
             track_id = track["id"]
             logger.debug("Getting GID metadata")
@@ -118,6 +128,7 @@ def main(
             album_metadata = spotify_api.get_album(
                 spotify_api.gid_to_track_id(metadata_gid["album"]["gid"])
             )
+
             # Get creds
             logger.debug("Getting track credits")
             track_credits = spotify_api.get_track_credits(track_id)
@@ -127,14 +138,6 @@ def main(
                 track_credits,
             )
 
-            # Path creator
-            logger.debug("Creating path")
-            final_path = downloader_song.get_final_path(tags)
-            if final_path.exists():
-                logger.warning(
-                    f'({queue_progress}) Track already exists at "{final_path}", skipping'
-                )
-                #continue
             logger.debug("Getting file info")
             file_id = downloader_song.get_file_id(metadata_gid)
             if not file_id:
@@ -142,7 +145,7 @@ def main(
                     f"({queue_progress}) Track not available on Spotify's "
                     "servers and no alternative found, skipping"
                 )
-                #continue
+                continue
             
             logger.debug("Getting PSSH")
             pssh = spotify_api.get_pssh(file_id)
@@ -150,11 +153,11 @@ def main(
             decryption_key = downloader_song.get_decryption_key(pssh)
             logger.debug("Getting stream URL")
             stream_url = spotify_api.get_stream_url(file_id)
-            encrypted_path = downloader.get_encrypted_path(track_id, ".m4a")
-            decrypted_path = downloader.get_decrypted_path(track_id, ".m4a")
+            encrypted_path = temp_path.joinpath(f"{track_id}_encrypted.m4a")
+            decrypted_path = temp_path.joinpath(f"{track_id}_decrypted.m4a")
             logger.debug(f'Downloading to "{encrypted_path}"')
             downloader_song.download(encrypted_path, stream_url)
-            remuxed_path = downloader.get_remuxed_path(track_id, ".m4a")
+            remuxed_path = temp_path.joinpath(f"{track_id}_remuxed.m4a")
             logger.debug(f'Decrypting/Remuxing to "{remuxed_path}"')
             downloader_song.remux(
                 encrypted_path,
@@ -162,14 +165,13 @@ def main(
                 remuxed_path,
                 decryption_key,
             )
+
             logger.debug("Applying tags")
             downloader.apply_tags(remuxed_path, tags)
             logger.debug(f'Moving to "{final_path}"')
             downloader.move_to_final_path(remuxed_path, final_path)
     except Exception as e:
-        logger.error(
-            f'Failed to download song! Error: {e}'
-        )
+        logger.error(f'Failed to download song! Error: {e}')
     finally: # Clean up
         if temp_path.exists():
             downloader.cleanup_temp_path()

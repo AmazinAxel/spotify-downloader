@@ -24,7 +24,6 @@ class Downloader:
     def __init__(
         self,
         spotify_api: SpotifyApi,
-        output_path: Path = Path("./Spotify"),
         temp_path: Path = Path("./temp"),
         wvd_path: Path = None,
         ffmpeg_path: str = "ffmpeg",
@@ -39,7 +38,6 @@ class Downloader:
         silence: bool = False,
     ):
         self.spotify_api = spotify_api
-        self.output_path = output_path
         self.temp_path = temp_path
         self.wvd_path = wvd_path
         self.ffmpeg_path = ffmpeg_path
@@ -97,28 +95,14 @@ class Downloader:
 
     def get_download_queue(self, url_info: UrlInfo) -> list[DownloadQueueItem]:
         download_queue = []
-        if url_info.type == "album":
-            download_queue.extend(
-                [
-                    DownloadQueueItem(metadata=track_metadata)
-                    for track_metadata in self.spotify_api.get_album(url_info.id)[
-                        "tracks"
-                    ]["items"]
-                ]
-            )
-        elif url_info.type == "playlist":
-            download_queue.extend(
-                [
-                    DownloadQueueItem(metadata=track_metadata["track"])
-                    for track_metadata in self.spotify_api.get_playlist(url_info.id)[
-                        "tracks"
-                    ]["items"]
-                ]
-            )
-        elif url_info.type == "track":
-            download_queue.append(
-                DownloadQueueItem(metadata=self.spotify_api.get_track(url_info.id))
-            )
+        download_queue.extend(
+            [
+                DownloadQueueItem(metadata=track_metadata["track"])
+                for track_metadata in self.spotify_api.get_playlist(url_info.id)[
+                    "tracks"
+                ]["items"]
+            ]
+        )
         return download_queue
 
     def get_sanitized_string(self, dirty_string: str, is_folder: bool) -> str:
@@ -171,27 +155,6 @@ class Downloader:
             for i in metadata_gid["album"]["cover_group"]["image"]
             if i["size"] == size
         )
-
-    def get_encrypted_path(
-        self,
-        track_id: str,
-        file_extension: str,
-    ) -> Path:
-        return self.temp_path / (f"{track_id}_encrypted" + file_extension)
-
-    def get_decrypted_path(
-        self,
-        track_id: str,
-        file_extension: str,
-    ) -> Path:
-        return self.temp_path / (f"{track_id}_decrypted" + file_extension)
-
-    def get_remuxed_path(
-        self,
-        track_id: str,
-        file_extension: str,
-    ) -> Path:
-        return self.temp_path / (f"{track_id}_remuxed" + file_extension)
 
     def decrypt_mp4decrypt(
         self,

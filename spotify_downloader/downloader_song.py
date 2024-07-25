@@ -27,9 +27,6 @@ class DownloaderSong:
     def _set_codec(self):
         self.codec = "MP4_256" if self.premium else "MP4_128"
 
-    def get_final_path(self, tags: dict) -> Path:
-        return Path(f"/home/alec/Music/Test/{tags['album_artist']} - {tags['title']}.m4a")
-
     def get_decryption_key(self, pssh: str) -> str:
         try:
             pssh = PSSH(pssh)
@@ -108,6 +105,10 @@ class DownloaderSong:
             "url": f"https://open.spotify.com/track/{self.downloader.spotify_api.gid_to_track_id(metadata_gid['gid'])}",
         }
         return tags
+
+    def get_artist(self, metadata_gid: dict) -> dict:
+        return self.downloader.get_artist(metadata_gid["artist"])
+
 
     def download(self, encrypted_path: Path, stream_url: str):
         if self.download_mode == DownloadModeSong.YTDLP:
