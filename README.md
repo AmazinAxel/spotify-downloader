@@ -11,6 +11,10 @@ This tool breaks Spotify's Terms of Service agreement. Because this requires the
 
 You can use a daily cronjob to run a backup script to sync all your playlists, making it easy to keep frequently-updated playlists synced on offline devices (such as MP3 players) for personal usage. 
 
+## Consider alternatives
+
+Because it pulls from Spotify directly, it is in violation of Spotify's ToS. Alternatives such as [spotdl](https://github.com/spotDL/spotify-downloader) rips the music from YouTube, making it legal. This should only be used if songs you're looking for cannot be found on YouTube, or errors are encountered while downloading. Additionally, this application does *not* properly include metadata, and exports to a .m4a file type rather than the standard .mp3 file type.
+
 ## Usage (for NixOS)
 
 TODO: write a nix flake
