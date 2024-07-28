@@ -6,6 +6,8 @@ import logging
 import os
 from enum import Enum
 from pathlib import Path
+import subprocess
+import shutil
 
 import click
 
@@ -174,5 +176,9 @@ def main(
         logger.error(f'Failed to download song! Error: {e}')
     finally: # Clean up
         if temp_path.exists():
-            downloader.cleanup_temp_path()
+            shutil.rmtree(temp_path)
     logger.info("Completed playlist download")
+
+    # Update mpc/mpd database (OPTIONAL)
+    subprocess.run('mpc update', shell = True)
+    logger.info("Updated mpc database")
