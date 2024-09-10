@@ -3,6 +3,10 @@ Python CLI for downloading music playlists from Spotify. Pre-configured for easy
 
 This is a complete recode from [glomatico/spotify-web-downloader](https://github.com/glomatico/spotify-web-downloader) with only strictly-necessary features. Intended for personal use to sync playlists. (Requires FFmpeg)
 
+# 📦️ Archived
+
+This project is now archived in favor of [spotdl](https://github.com/spotDL/spotify-downloader). Please use alternatives - this will get your account permanently rate limited by the Spotify API. It still may be useful for some downloads that spotdl doesn't find, but you should use this tool sparingly. 
+
 ## ⚠️ Terms of Service Warning
 
 This tool breaks Spotify's Terms of Service agreement. Because this requires the cookies of your account, all downloaded songs can be traced to your account. Be extremely careful while using this tool or use an alternate account. 
@@ -10,10 +14,6 @@ This tool breaks Spotify's Terms of Service agreement. Because this requires the
 ## Intended Purpose
 
 You can use a daily cronjob to run a backup script to sync all your playlists, making it easy to keep frequently-updated playlists synced on offline devices (such as MP3 players) for personal usage. 
-
-## Consider alternatives
-
-Because it pulls from Spotify directly, it is in violation of Spotify's ToS. Alternatives such as [spotdl](https://github.com/spotDL/spotify-downloader) rips the music from YouTube, making it legal. This should only be used if songs you're looking for cannot be found on YouTube, or errors are encountered while downloading. Additionally, this application does *not* properly include metadata, and exports to a .m4a file type rather than the standard .mp3 file type.
 
 ## Usage (for NixOS)
 
